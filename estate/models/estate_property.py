@@ -48,11 +48,8 @@ class EstateProperty(models.Model):
     ]
     
     
-    @api.ondelete(at_uninstall=False)
-    def _unlink_record(self):
-        if self.state not in('new', 'canceled'):
-            raise UserError(_('Only a canceled or new property can be deleted.'))
-    
+    # ---------------------------------------- Compute methods ------------------------------------
+
     @api.depends("living_area", "garden_area", "garden")
     def _compute_total_area(self):
         for record in self:
@@ -69,12 +66,25 @@ class EstateProperty(models.Model):
                 record.best_offer = max(record.offer_ids.mapped("price"))
             except ValueError:
                 record.best_offer = 0
-                
+         
+    # ----------------------------------- Constrains and Onchanges --------------------------------
+       
     @api.onchange("garden")
     def _onchange_partner_id(self):
         self.garden_area = 10
         self.garden_orientation = "north"
         
+        
+    # ------------------------------------------ CRUD Methods -------------------------------------
+
+    def unlink(self):
+        if not set(self.mapped("state")) <= {"new", "canceled"}:
+            raise UserError("Only new and canceled properties can be deleted.")
+        return super().unlink()
+    
+    
+    # ---------------------------------------- Action Methods -------------------------------------
+
     def action_cancel_property(self):
         for record in self:
             if record.state == 'sold':

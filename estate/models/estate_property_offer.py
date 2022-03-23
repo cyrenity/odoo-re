@@ -14,7 +14,7 @@ class EstatePropertyOffer(models.Model):
     
     price = fields.Float('Offer Amount', required=True)
     
-    status = fields.Selection(
+    state = fields.Selection(
         string='Offer Status',
         selection=[('accepted', 'Accepted'), ('refused', 'Refused')],
         help="Select status")
@@ -62,22 +62,27 @@ class EstatePropertyOffer(models.Model):
             if record.date_deadline:
                 record.validity = (record.date_deadline - record.create_date.date()).days
                 
-                
-    def action_accept_offer(self):
-        for record in self:
-            if record.property_id.state == 'offer_accepted':
-                raise UserError("Already accepted an offer for this property")
-
-            if record.property_id.state not in('sold', 'canceled'):
-                record.property_id.selling_price = record.price
-                record.property_id.state = 'offer_accepted'
-                record.property_id.buyer = record.partner_id
-            else:
-                raise UserError("Cannot accept an offer for a Sold/Canceled Property")
-        return self.write({'status': 'accepted'})
     
-    def action_refuse_offer(self):
-        for record in self:
-            if record.property_id.state in('sold', 'canceled'):
-                raise UserError("Cannot refuse an offer for a Sold/Canceled Property")
-        return self.write({'status': 'refused'})
+    # ---------------------------------------- Action Methods -------------------------------------
+    def action_accept(self):
+        if "accepted" in self.mapped("property_id.offer_ids.state"):
+            raise UserError("An offer has already been accepted.")
+        self.write(
+            {
+                "state": "accepted",
+            }
+        )
+        return self.mapped("property_id").write(
+            {
+                "state": "offer_accepted",
+                "selling_price": self.price,
+                "buyer": self.partner_id.id,
+            }
+        )
+
+    def action_refuse(self):
+        return self.write(
+            {
+                "state": "refused",
+            }
+        )
